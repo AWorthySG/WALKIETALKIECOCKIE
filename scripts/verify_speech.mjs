@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {writeFile} from 'node:fs/promises';
+const base=process.env.RELAY_URL || 'https://relay-walkie-api.jeremylimguanfong.workers.dev';
+const channel=await fetch(base+'/v1/channels',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:'Speech release check',displayName:'Speech tester'}),signal:AbortSignal.timeout(20000)});
+assert.equal(channel.status,201);const session=await channel.json();
+const speech=await fetch(base+'/v1/speech',{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${session.credentials.sessionToken}`},body:JSON.stringify({text:'Hello. This is a Relay voice message.'}),signal:AbortSignal.timeout(35000)});
+if(!speech.ok)throw Error(`Speech HTTP ${speech.status}: ${await speech.text()}`);
+assert.equal(speech.headers.get('content-type'),'audio/mpeg');assert.equal(speech.headers.get('cache-control'),'no-store');
+const audio=Buffer.from(await speech.arrayBuffer());assert.ok(audio.length>1000);
+await writeFile('/tmp/relay-speech-check.mp3',audio);
+console.log(`PASS: authenticated speech generated ${audio.length} audio bytes. No text or session tokens were logged.`);

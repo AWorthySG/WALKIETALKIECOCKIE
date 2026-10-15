@@ -1,0 +1,54 @@
+name: Verify Relay
+on:
+  push:
+  pull_request:
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm test
+
+  api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm test
+        working-directory: backend
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: ./scripts/setup_mobile.sh
+      - name: Run Flutter unit tests
+        working-directory: mobile
+        run: flutter test
+      - name: Compile Android debug APK
+        working-directory: mobile
+        run: flutter build apk --debug --dart-define=API_BASE_URL=https://example.invalid
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: ./scripts/setup_mobile.sh
+      - name: Compile iOS without code signing
+        working-directory: mobile
+        run: flutter build ios --debug --no-codesign --dart-define=API_BASE_URL=https://example.invalid
