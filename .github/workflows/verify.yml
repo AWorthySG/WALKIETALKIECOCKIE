@@ -33,6 +33,9 @@ jobs:
           channel: stable
           cache: true
       - run: ./scripts/setup_mobile.sh
+      - name: Run Flutter unit tests
+        working-directory: mobile
+        run: flutter test
       - name: Compile Android debug APK
         working-directory: mobile
         run: flutter build apk --debug --dart-define=API_BASE_URL=https://example.invalid

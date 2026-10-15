@@ -73,6 +73,14 @@ class FloorStatus {
   final String? speaker;
 }
 
+/// Times a lease with this device's clock when the server reports its duration,
+/// so a phone clock ahead of the server cannot cancel every press.
+int leaseExpiry(Map<String, dynamic> response, {int? now}) {
+  final duration = response['leaseDurationMs'];
+  if (duration is int) return (now ?? DateTime.now().millisecondsSinceEpoch) + duration;
+  return response['expiresAt'] as int;
+}
+
 class RelayApi {
   RelayApi({http.Client? client}) : _http = client ?? http.Client();
   final http.Client _http;
@@ -122,20 +130,12 @@ class RelayApi {
     }
   }
 
-  Future<ChannelSession> createChannel(String name, String displayName) async {
+  /// Joins one of the 20 shared numbered channels used by the browser app.
+  Future<ChannelSession> tuneChannel(int number, String displayName) async {
     final response = await _request(
       'POST',
-      '/v1/channels',
-      body: {'name': name, 'displayName': displayName},
-    );
-    return ChannelSession.fromJson(response);
-  }
-
-  Future<ChannelSession> joinChannel(String code, String displayName) async {
-    final response = await _request(
-      'POST',
-      '/v1/channels/join',
-      body: {'code': code, 'displayName': displayName},
+      '/v1/channels/tune',
+      body: {'number': number, 'displayName': displayName},
     );
     return ChannelSession.fromJson(response);
   }
@@ -146,7 +146,7 @@ class RelayApi {
       '/v1/floor/claim',
       token: token,
     );
-    return FloorLease(id: response['leaseId'] as String, expiresAt: response['expiresAt'] as int);
+    return FloorLease(id: response['leaseId'] as String, expiresAt: leaseExpiry(response));
   }
 
   Future<int> renewFloor(String token, String leaseId) async {
@@ -156,7 +156,7 @@ class RelayApi {
       token: token,
       body: {'leaseId': leaseId},
     );
-    return response['expiresAt'] as int;
+    return leaseExpiry(response);
   }
 
   Future<void> releaseFloor(String token, String leaseId) async {

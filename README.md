@@ -6,7 +6,7 @@ Shared internet walkie-talkie channels, with a browser app and Flutter source fo
 
 Enter your name, choose one of 20 shared channels and tap **Tune in**. Everyone on the same channel number hears each other. Share or Copy sends a `#channel=N` link that preselects the channel. Hold the round button to talk; release it to listen. On desktop, Space also works. The browser asks for microphone access when you tune in, so the first press is not interrupted by the prompt. If sound is blocked by the browser, tap **Enable sound**.
 
-The browser app uses numbered channels only. The server still accepts the older private create/join-by-code routes, which the Flutter source uses.
+The browser app and the Flutter app both use the same numbered channels, so phone and browser users meet on the same number. The server still accepts the older private create/join-by-code routes for clients built before 2.5.
 
 ## Sticker artwork
 
@@ -54,6 +54,7 @@ Changes:
 - Lease timing uses the server's `leaseDurationMs` with the phone's own clock. Previously, a phone clock more than about 12 seconds ahead of the server cancelled every press without an error.
 - Pressing again while the previous turn is still being released now starts a new turn, instead of being ignored.
 - Microphone permission is requested at Tune in, not on the first press.
+- The Flutter app now uses the 20 shared channels and the same lease timing as the browser app.
 - `npm run build` fails if either bundle contains a truncation marker or does not parse. `scripts/verify_live.mjs` applies the same check to the deployed `/app.js`.
 
 ## Included
