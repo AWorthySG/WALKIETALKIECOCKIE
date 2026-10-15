@@ -15,3 +15,6 @@ cloudflare/assets.js
 .clawness/*
 !.clawness/memory.md
 !.clawness/rules/
+
+# Local chat transcripts exported by Claude Code
+.claude/chat-exports/
