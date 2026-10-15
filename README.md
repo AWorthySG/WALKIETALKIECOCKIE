@@ -93,7 +93,7 @@ This checks that the deployed `/app.js` is complete, tunes to channel 20, create
 From the root, after installing Wrangler if needed:
 
 ```sh
-npx wrangler deploy --config cloudflare/wrangler.toml
+npm run deploy
 ```
 
 The Wrangler build hook runs the web build. The existing `RelayState` namespace and v1 migration are preserved. Set these private secrets on a fresh deployment:

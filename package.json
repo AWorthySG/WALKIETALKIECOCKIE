@@ -11,7 +11,8 @@
     "pretest": "node scripts/build_web.mjs",
     "test": "node --test cloudflare/acceptance.test.mjs test/*.test.mjs",
     "test:legacy": "node --test backend/test/server.test.mjs",
-    "build:branding": "node scripts/build_branding.mjs"
+    "build:branding": "node scripts/build_branding.mjs",
+    "deploy": "cd cloudflare && npx --yes wrangler@4.151.0 deploy"
   },
   "keywords": [],
   "author": "",

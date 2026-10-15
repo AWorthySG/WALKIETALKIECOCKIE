@@ -72,7 +72,7 @@ Deployment ID: `382e33772eee43bc94ada5c689b66dda`. The supplied sausage sticker 
 
 30 API/controller/configuration tests passed. A live browser inspection confirmed the sticker cover and logo loaded successfully and the Apple touch icon references the new artwork. Native launcher assets are prepared in source but native builds and physical Home Screen updates remain unverified. Existing installed shortcuts may need removing and adding again.
 
-## v2.5.2 push-to-talk repair (not yet deployed)
+## v2.5.2 push-to-talk repair
 
 The deployed v2.5.1 `/app.js` contained the literal text `... 71755 bytes omitted ...` in place of part of the bundle. Chromium reported `missing ) after argument list` on the live page, and Tune in did nothing. The deployed Worker was retrieved from Cloudflare; its server logic was intact and is now in `cloudflare/worker.js`.
 
@@ -82,6 +82,13 @@ Checked in this environment:
 - The build check rejects a truncated or unparseable bundle.
 - Two headless Chromium pages, using the rebuilt client and the live API, tuned to channel 19 and connected to LiveKit. Holding the button on the first page showed TRANSMITTING and Microphone live. The second page showed NOW TRANSMITTING, named the speaker and received one remote audio track. Release returned to HOLD TO TALK. A re-press 150 ms after release transmitted again.
 
-Not checked: deployment, physical phones, audible playback and Flutter builds.
+Deployed on 15 October 2026 with Wrangler 4.151.0. Version ID: `975e851b-f7b8-43dc-bd39-289511ecacf7`. Bindings `RELAY_STATE` (Durable Object) and `AI` were retained.
 
-Deploy with `npx wrangler deploy --config cloudflare/wrangler.toml`, then run `node scripts/verify_live.mjs`. It expects version 2.5.2.
+After deployment:
+
+- `node scripts/verify_live.mjs` passed: complete `/app.js`, app shell, channel and floor controls, session refresh and a real LiveKit room join.
+- The two-page Chromium test was repeated on the live URL with the same results as above.
+
+Not checked: physical phones and audible playback.
+
+Deploy with `npm run deploy`, then run `node scripts/verify_live.mjs`.
