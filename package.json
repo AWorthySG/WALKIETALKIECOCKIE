@@ -1,0 +1,31 @@
+{
+  "name": "cockie-talkie",
+  "version": "2.5.2",
+  "description": "Private push-to-talk for the web, iPhone and Android.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "build": "node scripts/build_web.mjs",
+    "pretest": "node scripts/build_web.mjs",
+    "test": "node --test cloudflare/acceptance.test.mjs test/*.test.mjs",
+    "test:legacy": "node --test backend/test/server.test.mjs",
+    "build:branding": "node scripts/build_branding.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@fontsource/nunito": "5.3.0",
+    "livekit-client": "2.22.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261015.1",
+    "@livekit/protocol": "1.52.1",
+    "esbuild": "0.28.2",
+    "sharp": "0.35.5"
+  },
+  "private": true
+}

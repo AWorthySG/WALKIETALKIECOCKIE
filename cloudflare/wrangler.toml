@@ -1,0 +1,21 @@
+name = "relay-walkie-api"
+main = "worker.js"
+compatibility_date = "2026-10-15"
+
+[build]
+command = "npm --prefix .. run build"
+
+[ai]
+binding = "AI"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[[durable_objects.bindings]]
+name = "RELAY_STATE"
+class_name = "RelayState"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RelayState"]
