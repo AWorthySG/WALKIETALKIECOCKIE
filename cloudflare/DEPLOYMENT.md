@@ -93,7 +93,7 @@ Not checked: physical phones and audible playback.
 
 Deploy with `npm run deploy`, then run `node scripts/verify_live.mjs`.
 
-## v2.6.0 ease-of-use update (not yet in production)
+## v2.6.0 ease-of-use update
 
 Private family channels, opening straight into the saved channel, tap to talk with a one-minute limit, quick messages, a simpler main screen, night mode and larger text. The Flutter app uses private channels again.
 
@@ -104,3 +104,7 @@ Checked in this environment:
 - The browser test found that the tap timer threw "Illegal invocation" in browsers only; fixed, with a regression test.
 
 Not checked: physical phones, audible playback, and the Flutter builds (CI compiles them).
+
+Deployed on 16 October 2026 with Wrangler 4.151.0. Version ID: `32a70dad-e6fa-403c-8655-f872980fd49f`. Bindings `RELAY_STATE` (Durable Object) and `AI` were retained.
+
+After deployment, `node scripts/verify_live.mjs` passed, and the two-phone Chromium test was repeated on the live URL with the same results as above.
