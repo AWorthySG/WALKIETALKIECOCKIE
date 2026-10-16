@@ -27,6 +27,21 @@ void main() {
     expect(session.inviteCode, isNull);
   });
 
+  test('joinChannel posts the invite code', () async {
+    late Map<String, dynamic> sent;
+    final client = MockClient((request) async {
+      expect(request.url.path, '/v1/channels/join');
+      sent = jsonDecode(request.body) as Map<String, dynamic>;
+      return http.Response(jsonEncode({
+        'channel': {'id': 'c1', 'name': 'Family'},
+        'credentials': {'serverUrl': 'wss://x.livekit.cloud', 'participantToken': 'p', 'sessionToken': 's', 'participantId': 'id'},
+      }), 200);
+    });
+    final session = await RelayApi(client: client).joinChannel('ABCD-EFGH-JKMN-PQ23', 'Dad');
+    expect(sent, {'code': 'ABCD-EFGH-JKMN-PQ23', 'displayName': 'Dad'});
+    expect(session.name, 'Family');
+  });
+
   test('server errors surface their message', () async {
     final client = MockClient((_) async => http.Response(jsonEncode({'error': 'Choose a channel from 1 to 20.'}), 400));
     expect(

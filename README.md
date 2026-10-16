@@ -1,48 +1,32 @@
 # Cockie Talkie
 
-Shared internet walkie-talkie channels, with a browser app and Flutter source for iPhone and Android.
+Private family walkie-talkie channels, with a browser app and Flutter source for iPhone and Android.
 
 **Open:** https://relay-walkie-api.jeremylimguanfong.workers.dev
 
-Enter your name, choose one of 20 shared channels and tap **Tune in**. Everyone on the same channel number hears each other. Share or Copy sends a `#channel=N` link that preselects the channel. Hold the round button to talk; release it to listen. On desktop, Space also works. The browser asks for microphone access when you tune in, so the first press is not interrupted by the prompt. If sound is blocked by the browser, tap **Enable sound**.
+Enter your name and tap **Start channel**. Open **More options** to share the invite link or code with your family; they open the link, enter their name and tap **Join channel**. Only people with the invite code can join.
 
-The browser app and the Flutter app both use the same numbered channels, so phone and browser users meet on the same number. The server still accepts the older private create/join-by-code routes for clients built before 2.5.
+After the first time, the phone remembers the channel and opens straight into it. **Leave this channel** (under More options) makes the phone forget it.
 
-## Sticker artwork
+Tap the round button to talk and tap it again to stop. A transmission stops by itself after one minute. To hold the button while talking instead, switch on **Hold the button to talk** under More options. On desktop, Space also works.
 
-The supplied Cockie Talkie sausage sticker is used for the app logo, opening cover, installation artwork, browser favicon, Android maskable Home Screen icon and iPhone Home Screen icon. The original image is preserved at `branding/sticker-original.png`.
+**Quick messages** send a spoken message with one tap and no talking: "Can you come here, please?", "Please bring me some water.", "Baby is asleep. Please be quiet." and "I am okay. No need to come." A repeated quick message plays at once because its audio is kept for the session.
 
-Run `npm run build:branding` to regenerate cover images and icon sizes, then `npm run build` to bundle the web release. Native launcher icon sets are included under `mobile/assets/app-icons`; `scripts/setup_mobile.sh` copies them into the generated Android and iOS projects. The Flutter opening screen and header also use the sticker asset.
+**Night mode** (top right) turns the screen dim red on black. The choice is remembered.
 
-Existing iPhone Home Screen shortcuts may retain their old icon. Remove the shortcut and add it again to pick up the sticker. Android icon updates are controlled by the browser and may take time.
+The browser asks for microphone access when you start or join, so the first tap is not interrupted by the prompt. If sound is blocked by the browser, tap **Tap to hear the channel**.
 
-## Install on the Home Screen
+The numbered shared channels from 2.5 are no longer offered in the app. The server still accepts `/v1/channels/tune` for older clients.
 
-Open the app and tap **Install app**. The installation guide provides iPhone/iPad and Android steps, detects the current phone platform, and offers the browser's native install prompt when available. On iPhone, use Safari > Share > Add to Home Screen, leaving Open as Web App on if shown. On Android, use Chrome's install prompt or menu > Install app / Add to Home screen. Installation requires the user's confirmation on each device.
+## Version 2.6.0: easier to use
 
-A standalone manifest, Android maskable icon, 180-pixel Apple touch icon, Apple web-app name and offline shell are included. Installed app windows hide the install buttons. Launching from the icon opens a standalone web app, with the same internet and background limits as the browser version. This is Home Screen web-app installation; no native APK or IPA is required or included.
-
-## Background listening and typography
-
-The app is named **Cockie Talkie**, with locally bundled Nunito fonts in the web and Flutter apps. The existing address and private channel identities are retained.
-
-While connected, switch on **Background listening** to keep receiving incoming speech when switching away. The microphone is stopped whenever the app loses foreground focus. There are no idle sounds, silent audio loops, pings or alert tones. Turning off Sound also silences incoming background transmissions. Leaving the channel switches off background listening. This preference is deliberately off for each new channel session.
-
-- **Web / home-screen app:** the connection is retained while the browser allows it, and incoming remote audio remains audible when the option is on. When off, remote audio is muted while the page is hidden and restored on return. Closing the page ends the call. No browser setting can guarantee indefinite background execution or locked-screen reception.
-- **Native Android source:** the option starts an Android mediaPlayback foreground service with a partial wake lock and Wi-Fi lock, subject to granted permissions. A persistent, silent notification identifies the listening session. A vendored MIT-licensed flutter_background 1.3.1 plugin is adapted to suppress notification sound and vibration. Turning the option off or leaving stops the service. Force-stop, process death, lost internet and device power management can still interrupt reception. Service restart does not reconstruct a private channel after process death.
-- **Native iPhone source:** the option retains remote audio with the existing iOS background-audio capability. This remains best effort; full native Push to Talk / push activation is not implemented, so reception after suspension or termination is not guaranteed.
-
-Android and iPhone behaviour is not compiled or physically tested in this environment. The setup script adds Android service permissions and declarations and iOS background-audio configuration; an idempotency test checks the generated metadata.
-
-## Type a voice message
-
-In a connected channel, use **Type a voice message**, enter up to 300 characters in English, and tap **Send as voice**. The server converts the text into MP3 audio. The sender transmits that audio as a LiveKit track, so other connected browser and Flutter participants hear an ordinary radio transmission. The sender's physical microphone is never enabled for this feature.
-
-The message uses the existing speaking lease. If another person is already speaking when it is ready, the draft is kept and the sender can try again. **Stop voice message**, leaving the screen, losing the connection, or a failed lease renewal stops playback and releases the floor. Messages are live only, with no inbox or replay. Transmitted is not a delivery or listening receipt.
-
-Cloudflare's `AI` binding runs `@cf/deepgram/aura-2-en`. It requires Workers AI access and consumes speech-generation usage on the Cloudflare account. No separate speech API key is needed. The endpoint checks channel authentication, limits input to 300 characters and allows six generations per channel per minute. Generated audio is not stored by the app, and responses use `no-store`.
-
-Native Flutter apps can receive this audio with their existing voice receiver. The text composer is currently in the web app; no native Flutter text composer is included.
+- Private family channels with invite codes, instead of shared numbered channels anyone could join.
+- Opens straight into the saved channel.
+- Tap to talk, with a one-minute limit. Hold-to-talk remains as an option.
+- Four one-tap quick messages.
+- Simpler main screen: status, talk button and quick messages. Everything else is under **More options**.
+- Night mode and larger text.
+- The Flutter app uses the same private channels.
 
 ## Version 2.5.2: push-to-talk repair
 
@@ -54,13 +38,13 @@ Changes:
 - Lease timing uses the server's `leaseDurationMs` with the phone's own clock. Previously, a phone clock more than about 12 seconds ahead of the server cancelled every press without an error.
 - Pressing again while the previous turn is still being released now starts a new turn, instead of being ignored.
 - Microphone permission is requested at Tune in, not on the first press.
-- The Flutter app now uses the 20 shared channels and the same lease timing as the browser app.
+- The Flutter app uses the same lease timing as the browser app.
 - `npm run build` fails if either bundle contains a truncation marker or does not parse. `scripts/verify_live.mjs` applies the same check to the deployed `/app.js`.
 
 ## Included
 
 - Phone-friendly web interface, bundled LiveKit SDK and installable home-screen app shell.
-- Twenty shared numbered channels, channel links, sharing and copying.
+- Private family channels, invite links and codes, sharing and copying.
 - Live participant and speaker indicators, sound toggle, automatic reconnect and explicit reconnect after disconnection.
 - Server-coordinated speaking leases. Both browser and Flutter clients stop transmitting on release, loss of foreground focus, failed renewal or lease expiry.
 - Session refresh, starting muted, microphone permission handling and screen wake lock where available.

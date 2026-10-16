@@ -1,6 +1,6 @@
 {
   "name": "cockie-talkie",
-  "version": "2.5.2",
+  "version": "2.6.0",
   "description": "Private push-to-talk for the web, iPhone and Android.",
   "main": "index.js",
   "directories": {

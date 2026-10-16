@@ -3,11 +3,13 @@ import { Radio } from './radio.js';
 import { createVoicePlayback } from './voice-message.js';
 import { updateIncomingAudio } from './listening.js';
 import { installPlatform, isStandalone } from './install.js';
-import { channelFromHash, channelUrl } from './channel.js';
+import { normaliseCode, formatCode, inviteFromHash, inviteUrl, loadSaved, saveChannel, forgetChannel } from './family.js';
+import { TalkControl } from './talk-control.js';
+import { PhraseCache } from './phrase-cache.js';
 
 const $ = id => document.getElementById(id);
 let busy = false, muted = false, floor = null, pollTimer, refreshTimer, wakeLock, installPrompt;
-let pointer = null, spacePressed = false;
+let pointer = null, spacePressed = false, creating = true, familyCode = null;
 const audioElements = new Map();
 let voiceJob = null;
 let backgroundListening = false;
@@ -23,36 +25,88 @@ async function api(route, body = {}, token) {
   return data;
 }
 const radio = new Radio({ api, onChange: render });
-try {
-  $('name').value = localStorage.getItem('relay-name') || '';
-  const saved = channelFromHash(`channel=${localStorage.getItem('relay-channel')}`);
-  if (saved) $('channel-number').value = String(saved);
-} catch { /* private browsing */ }
-const linked = channelFromHash(location.hash);
-if (linked) $('channel-number').value = String(linked);
-if (location.hash) history.replaceState(null, '', location.pathname);
+const store = (() => { try { return window.localStorage; } catch { return null; } })();
+const QUICK_MESSAGES = ['Can you come here, please?', 'Please bring me some water.', 'Baby is asleep. Please be quiet.', 'I am okay. No need to come.'];
+const phrases = new PhraseCache();
+const talk = new TalkControl({
+  start: () => void startTalking(), stop: () => { pointer = null; spacePressed = false; void radio.end(); },
+  isActive: () => radio.transmitting || radio.claiming,
+  onLimit: () => message('notice', 'Stopped after one minute. Tap again to keep talking.'),
+});
 
-$('entry').onsubmit = async event => {
-  event.preventDefault(); if (busy) return;
-  busy = true; $('enter').disabled = true; $('channel-number').disabled = true;
-  $('enter').textContent = 'Tuning in…'; message('error');
+function setMode(create) {
+  creating = create;
+  $('create-mode').setAttribute('aria-pressed', String(create)); $('join-mode').setAttribute('aria-pressed', String(!create));
+  $('channel-field').hidden = !create; $('code-field').hidden = create;
+  $('channel').required = create; $('code').required = !create;
+  $('enter-label').textContent = create ? 'Start channel' : 'Join channel';
+  message('error');
+}
+$('create-mode').onclick = () => setMode(true); $('join-mode').onclick = () => setMode(false);
+function setNight(on) {
+  document.documentElement.classList.toggle('night', on);
+  $('night').setAttribute('aria-pressed', String(on)); $('night').textContent = on ? 'Day mode' : 'Night mode';
+  try { store?.setItem('ct-night', on ? '1' : '0'); } catch { /* optional */ }
+}
+$('night').onclick = () => setNight(!document.documentElement.classList.contains('night'));
+function setHoldMode(hold) {
+  talk.cancel(); talk.mode = hold ? 'hold' : 'tap'; $('hold-mode').checked = hold;
+  try { store?.setItem('ct-hold', hold ? '1' : '0'); } catch { /* optional */ }
+  render();
+}
+$('hold-mode').onchange = () => setHoldMode($('hold-mode').checked);
+try {
+  setNight(store?.getItem('ct-night') === '1');
+  talk.mode = store?.getItem('ct-hold') === '1' ? 'hold' : 'tap'; $('hold-mode').checked = talk.mode === 'hold';
+  $('name').value = store?.getItem('relay-name') || '';
+} catch { /* private browsing */ }
+for (const text of QUICK_MESSAGES) {
+  const button = document.createElement('button');
+  button.type = 'button'; button.className = 'quick-message'; button.textContent = text;
+  button.onclick = () => void sendVoice(text);
+  $('quick-grid').append(button);
+}
+
+const linkedCode = inviteFromHash(location.hash);
+// The invite is kept in memory and out of referrers and browser history.
+if (location.hash) history.replaceState(null, '', location.pathname);
+const saved = store ? loadSaved(store) : null;
+if (linkedCode && linkedCode !== saved?.code) { $('code').value = formatCode(linkedCode); setMode(false); }
+else if (saved) void enter({ join: true, code: saved.code, displayName: saved.name, automatic: true });
+
+$('entry').onsubmit = event => {
+  event.preventDefault();
   const displayName = $('name').value.trim();
-  const number = Number($('channel-number').value);
+  if (creating) void enter({ join: false, name: $('channel').value.trim(), displayName });
+  else void enter({ join: true, code: $('code').value, displayName });
+};
+async function enter({ join, code, name, displayName, automatic = false }) {
+  if (busy) return;
+  busy = true; $('enter').disabled = true; $('create-mode').disabled = true; $('join-mode').disabled = true;
+  $('enter-label').textContent = 'Connecting…'; message('error');
   try {
     if (displayName.length < 2) throw Error('Enter a name of at least two characters.');
+    const normalised = join ? normaliseCode(code) : null;
+    if (join && !normalised) throw Error('Enter the 16-character invite code, for example ABCD-EFGH-JKMN-PQ23.');
     // Ask for the microphone now, so the permission prompt cannot interrupt the first press.
     const microphone = primeMicrophone();
-    const session = await api('/v1/channels/tune', { number, displayName });
+    const session = await api(join ? '/v1/channels/join' : '/v1/channels', join ? { code: normalised, displayName } : { name, displayName });
+    familyCode = normalised || normaliseCode(session.channel.code);
     radio.session = session;
     await connect(session);
     await microphone;
-    try { localStorage.setItem('relay-name', displayName); localStorage.setItem('relay-channel', String(number)); } catch { /* optional */ }
-  } catch (error) { await radio.leave(); showError(error); }
-  finally {
-    busy = false; $('enter').disabled = false; $('channel-number').disabled = false;
-    $('enter').innerHTML = 'Tune in <span>↗</span>'; render();
+    if (store) { saveChannel(store, { code: familyCode, name: displayName }); try { store.setItem('relay-name', displayName); } catch { /* optional */ } }
+    if (!join) message('notice', 'Your channel is ready. Open More options to share the invite with your family.');
+  } catch (error) {
+    await radio.leave(); familyCode = null;
+    // A deleted or mistyped saved channel should not retry on every launch.
+    if (automatic && error.status === 404 && store) forgetChannel(store);
+    showError(automatic && error.status === 404 ? Error('The saved channel no longer exists. Start a new one or join with a code.') : error);
+  } finally {
+    busy = false; $('enter').disabled = false; $('create-mode').disabled = false; $('join-mode').disabled = false;
+    setMode(creating); render();
   }
-};
+}
 async function primeMicrophone() {
   try { if ((await navigator.permissions?.query({ name: 'microphone' }))?.state === 'granted') return; } catch { /* query unsupported */ }
   try {
@@ -74,7 +128,7 @@ async function connect(session) {
     if (state !== ConnectionState.Connected) { cancelVoice(); void radio.end(); }
     render();
   });
-  room.on(RoomEvent.MediaDevicesError, () => showError(Error('Allow microphone access in your browser settings, then hold the button again.')));
+  room.on(RoomEvent.MediaDevicesError, () => showError(Error('Allow microphone access in your browser settings, then tap the button again.')));
   try { await room.connect(session.credentials.serverUrl, session.credentials.participantToken); }
   catch (error) { await room.disconnect(); throw Error('Unable to join the voice channel. Please check your connection and try again.'); }
   startTimers(); await pollFloor(); void requestWakeLock(); render();
@@ -114,13 +168,16 @@ async function refreshSession() {
 }
 function render() {
   const session = radio.session, room = radio.room, connected = radio.connected;
-  $('lobby').hidden = !!session; $('channel-view').hidden = !session; $('leave').hidden = !session;
+  $('lobby').hidden = !!session; $('channel-view').hidden = !session;
   if (!session) return;
   $('channel-title').textContent = session.channel.name;
-  $('invite-code').textContent = `${session.channel.name} · shared`;
-  $('connection').textContent = connected ? '● Connected' : room?.state === 'reconnecting' || room?.state === 'signalReconnecting' ? 'Reconnecting…' : 'Disconnected';
+  $('invite-code').textContent = familyCode ? formatCode(familyCode) : '';
+  const state = room?.state;
+  $('connection').textContent = connected ? '● Connected' : state === 'connecting' || !state && busy ? 'Connecting…' : state === 'reconnecting' || state === 'signalReconnecting' ? 'Reconnecting…' : 'Disconnected';
   $('talk').disabled = !connected || busy || !!voiceJob;
-  $('send-voice').disabled = !connected || busy || !!voiceJob || radio.claiming || radio.transmitting || !!radio.ending;
+  const voiceBlocked = !connected || busy || !!voiceJob || radio.claiming || radio.transmitting || !!radio.ending;
+  $('send-voice').disabled = voiceBlocked;
+  for (const button of $('quick-grid').children) button.disabled = voiceBlocked;
   $('voice-text').disabled = !!voiceJob;
   $('stop-voice').hidden = !voiceJob;
   $('talk').setAttribute('aria-pressed', String(radio.transmitting));
@@ -130,8 +187,10 @@ function render() {
   const speaker = active?.name || (isBusy ? floor.speaker : null);
   $('air-status').textContent = radio.transmitting ? (radio.clip ? 'YOUR VOICE MESSAGE IS LIVE' : 'YOU ARE LIVE') : radio.claiming ? 'REQUESTING AIRTIME' : speaker ? 'NOW TRANSMITTING' : 'CHANNEL IS CLEAR';
   $('speaker').textContent = radio.transmitting ? 'You' : radio.claiming ? 'One moment…' : speaker || 'Ready to talk';
-  $('talk-label').textContent = radio.transmitting ? 'TRANSMITTING' : radio.claiming ? 'CONNECTING' : 'HOLD TO TALK';
-  $('talk-hint').textContent = radio.transmitting ? 'RELEASE TO STOP' : 'RELEASE TO LISTEN';
+  const tap = talk.mode === 'tap';
+  $('talk-label').textContent = radio.transmitting ? (tap ? 'TAP TO STOP' : 'TRANSMITTING') : radio.claiming ? 'CONNECTING' : tap ? 'TAP TO TALK' : 'HOLD TO TALK';
+  $('talk-hint').textContent = radio.transmitting ? (tap ? 'YOU ARE LIVE' : 'RELEASE TO STOP') : tap ? 'TAP AGAIN TO STOP' : 'RELEASE TO LISTEN';
+  $('talk').setAttribute('aria-label', tap ? (radio.transmitting ? 'Tap to stop talking' : 'Tap to talk') : 'Hold to talk; release to listen');
   $('mic-status').textContent = radio.transmitting && !radio.clip ? 'Microphone live' : 'Microphone off';
   $('enable-audio').hidden = !connected || room.canPlaybackAudio || muted;
   $('reconnect').hidden = connected || busy || !['disconnected', undefined].includes(room?.state);
@@ -152,20 +211,26 @@ async function startTalking() {
   await radio.begin();
   if (radio.error) showError(Error(radio.error));
 }
-function stopTalking() { pointer = null; spacePressed = false; void radio.end(); }
+function stopTalking() { talk.cancel(); }
 $('talk').addEventListener('pointerdown', event => {
   if (event.button !== 0 || pointer !== null || spacePressed) return;
   event.preventDefault(); pointer = event.pointerId;
-  $('talk').setPointerCapture(event.pointerId); void startTalking();
+  if (talk.mode === 'hold') $('talk').setPointerCapture(event.pointerId);
+  talk.press();
 });
-for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) $('talk').addEventListener(event, e => { if (pointer === e.pointerId) stopTalking(); });
+for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) $('talk').addEventListener(event, e => {
+  if (pointer !== e.pointerId) return;
+  pointer = null;
+  // A cancelled touch in hold mode must stop; in tap mode only a tap toggles.
+  if (talk.mode === 'hold') talk.release();
+});
 $('talk').addEventListener('contextmenu', event => event.preventDefault());
 window.addEventListener('keydown', event => {
   if (!radio.session || event.code !== 'Space' || /INPUT|TEXTAREA|SELECT|BUTTON/.test(event.target.tagName) && event.target !== $('talk') || event.target.isContentEditable) return;
   event.preventDefault(); if (event.repeat || spacePressed || pointer !== null) return;
-  spacePressed = true; void startTalking();
+  spacePressed = true; talk.press();
 });
-window.addEventListener('keyup', event => { if (event.code === 'Space' && spacePressed) { event.preventDefault(); stopTalking(); } });
+window.addEventListener('keyup', event => { if (event.code === 'Space' && spacePressed) { event.preventDefault(); spacePressed = false; talk.release(); } });
 window.addEventListener('blur', () => { stopTalking(); cancelVoice(); });
 window.addEventListener('pagehide', () => { cancelVoice(); stopTalking(); void radio.room?.disconnect(); });
 window.addEventListener('offline', () => { cancelVoice(); stopTalking(); message('error', 'You are offline. Waiting for your connection…'); });
@@ -190,6 +255,7 @@ $('sound').onclick = () => {
 };
 $('leave').onclick = async () => {
   if (busy) return; busy = true; $('leave').disabled = true;
+  if (store) forgetChannel(store); familyCode = null; $('code').value = '';
   clearTimeout(pollTimer); clearTimeout(refreshTimer); cancelVoice(); stopTalking();
   await radio.leave(); clearTimeout(pollTimer); clearTimeout(refreshTimer); await wakeLock?.release();
   backgroundListening = false; $('background-listening').checked = false; applyListening();
@@ -234,11 +300,34 @@ function cancelVoice() {
 $('stop-voice').onclick = cancelVoice;
 $('voice-form').onsubmit = async event => {
   event.preventDefault();
-  const text = $('voice-text').value.trim();
-  if (!radio.connected || !radio.session || voiceJob || busy || radio.transmitting || radio.claiming || radio.ending) return;
-  if (!text || text.length > 300) { showError(Error('Enter a message of 1 to 300 characters.')); return; }
+  if (await sendVoice($('voice-text').value.trim())) { $('voice-text').value = ''; $('voice-count').textContent = '0 / 300 · English'; }
+};
+async function readSpeech(text, job) {
+  const cached = phrases.get(text);
+  if (cached) return cached;
+  const response = await fetch('/v1/speech', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${job.session.credentials.sessionToken}` }, body: JSON.stringify({ text }), signal: job.abort.signal });
+  if (!response.ok) {
+    const error = await response.json(); throw Error(error.error || 'Unable to prepare the voice message.');
+  }
+  // Bound the response before decoding untrusted audio into memory.
+  const reader = response.body.getReader(); const chunks = []; let size = 0;
+  while (true) {
+    const { done, value } = await reader.read(); if (done) break;
+    size += value.byteLength;
+    if (size > 2 * 1024 * 1024) { await reader.cancel(); throw Error('The generated audio is too large. Please shorten the message.'); }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size); let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+  if (QUICK_MESSAGES.includes(text)) phrases.set(text, bytes);
+  return bytes;
+}
+// Returns true when the message was transmitted.
+async function sendVoice(text) {
+  if (!radio.connected || !radio.session || voiceJob || busy || radio.transmitting || radio.claiming || radio.ending) return false;
+  if (!text || text.length > 300) { showError(Error('Enter a message of 1 to 300 characters.')); return false; }
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) { showError(Error('This browser cannot send generated audio. Try Safari or Chrome.')); return; }
+  if (!AudioContextClass) { showError(Error('This browser cannot send generated audio. Try Safari or Chrome.')); return false; }
   const context = new AudioContextClass();
   const job = { session: radio.session, context, abort: new AbortController(), playback: null, cancelled: false };
   voiceJob = job; message('error'); $('voice-status').textContent = 'Preparing your voice message…'; render();
@@ -246,42 +335,29 @@ $('voice-form').onsubmit = async event => {
   try {
     // Resume within the Send gesture, before network work, for iPhone support.
     await context.resume();
-    const response = await fetch('/v1/speech', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${job.session.credentials.sessionToken}` }, body: JSON.stringify({ text }), signal: job.abort.signal });
-    if (!response.ok) {
-      const error = await response.json(); throw Error(error.error || 'Unable to prepare the voice message.');
-    }
-    // Bound the response before decoding untrusted audio into memory.
-    const reader = response.body.getReader(); const chunks = []; let size = 0;
-    while (true) {
-      const { done, value } = await reader.read(); if (done) break;
-      size += value.byteLength;
-      if (size > 2 * 1024 * 1024) { await reader.cancel(); throw Error('The generated audio is too large. Please shorten the message.'); }
-      chunks.push(value);
-    }
+    const bytes = await readSpeech(text, job);
     clearTimeout(timer);
-    if (job.cancelled || radio.session !== job.session || !radio.connected || document.hidden) return;
-    const bytes = new Uint8Array(size); let offset = 0;
-    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+    if (job.cancelled || radio.session !== job.session || !radio.connected || document.hidden) return false;
     const buffer = await context.decodeAudioData(bytes.buffer);
     if (!buffer.duration || buffer.duration > 60) throw Error('The voice message is too long. Please shorten it to under one minute.');
-    if (job.cancelled || radio.session !== job.session || !radio.connected || document.hidden) return;
+    if (job.cancelled || radio.session !== job.session || !radio.connected || document.hidden) return false;
     if (context.state !== 'running') throw Error('Audio paused. Tap Send again to enable it.');
     job.playback = createVoicePlayback(context, buffer);
     $('voice-status').textContent = 'Connecting your voice message…';
     await radio.playClip(job.playback);
     if (radio.error) throw Error(radio.error);
-    if (job.cancelled || !radio.transmitting) return;
+    if (job.cancelled || !radio.transmitting) return false;
     $('voice-status').textContent = 'Sending as audio. Your microphone is off.';
     await job.playback.done;
-    if (!job.cancelled && !radio.error) {
-      $('voice-text').value = ''; $('voice-count').textContent = '0 / 300 · English';
-      $('voice-status').textContent = 'Voice message transmitted to the channel.';
-    }
+    if (job.cancelled || radio.error) return false;
+    $('voice-status').textContent = `Sent: “${text}”`;
+    return true;
   } catch (error) {
     if (!job.cancelled) {
       const description = error.name === 'AbortError' ? 'Speech generation timed out. Please try again.' : error.message;
-      showError(Error(description)); $('voice-status').textContent = 'Message not completed. Your draft is kept below.';
+      showError(Error(description)); $('voice-status').textContent = 'Message not sent. Please try again.';
     }
+    return false;
   } finally {
     clearTimeout(timer); job.playback?.stop();
     if (radio.session === job.session) {
@@ -293,16 +369,16 @@ $('voice-form').onsubmit = async event => {
     if (voiceJob === job) voiceJob = null;
     render();
   }
-};
-const shareUrl = () => channelUrl(location.origin, radio.session.channel.number);
+}
+const shareUrl = () => inviteUrl(location.origin, familyCode);
 $('copy').onclick = async () => {
-  try { await navigator.clipboard.writeText(shareUrl()); message('notice', 'Channel link copied.'); }
-  catch { message('notice', `Tune in to ${radio.session.channel.name}.`); }
+  try { await navigator.clipboard.writeText(shareUrl()); message('notice', 'Invite link copied.'); }
+  catch { message('notice', `Share this invite code: ${formatCode(familyCode)}`); }
 };
 $('share').onclick = async () => {
   const data = { title: 'Join my Cockie Talkie channel', text: `Join ${radio.session.channel.name} on Cockie Talkie.`, url: shareUrl() };
   try { if (navigator.share) await navigator.share(data); else await $('copy').onclick(); }
-  catch (error) { if (error.name !== 'AbortError') showError(Error('Unable to share. Use Copy to copy the channel link.')); }
+  catch (error) { if (error.name !== 'AbortError') showError(Error('Unable to share. Use Copy link instead.')); }
 };
 const standaloneQuery = window.matchMedia('(display-mode: standalone)');
 let installedHere = isStandalone(standaloneQuery.matches, navigator.standalone);
