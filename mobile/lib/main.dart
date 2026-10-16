@@ -68,8 +68,9 @@ class _RelayHomeState extends State<RelayHome> {
   late final RelayApi _api;
   late final RadioController _radio;
   final _name = TextEditingController();
-  static const _channelCount = 20;
-  int _channel = 1;
+  final _channelName = TextEditingController();
+  final _inviteCode = TextEditingController();
+  bool _creating = true;
   bool _loading = false;
   bool _showParticipants = false;
   String? _formError;
@@ -84,10 +85,7 @@ class _RelayHomeState extends State<RelayHome> {
 
   Future<void> _loadName() async {
     final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    if (_name.text.isEmpty) _name.text = prefs.getString('relay_display_name') ?? '';
-    final saved = prefs.getInt('relay_channel');
-    if (saved != null && saved >= 1 && saved <= _channelCount) setState(() => _channel = saved);
+    if (mounted && _name.text.isEmpty) _name.text = prefs.getString('relay_display_name') ?? '';
   }
 
   void _refresh() {
@@ -100,23 +98,36 @@ class _RelayHomeState extends State<RelayHome> {
     _radio.dispose();
     _api.dispose();
     _name.dispose();
+    _channelName.dispose();
+    _inviteCode.dispose();
     super.dispose();
   }
 
   Future<void> _enter() async {
     final displayName = _name.text.trim();
+    final channel = _channelName.text.trim();
+    final code = _inviteCode.text.trim();
     if (displayName.length < 2) {
       setState(() => _formError = 'Enter a name of at least 2 characters.');
+      return;
+    }
+    if (_creating && channel.length < 2) {
+      setState(() => _formError = 'Give your channel a name.');
+      return;
+    }
+    if (!_creating && code.isEmpty) {
+      setState(() => _formError = 'Enter the invite code you received.');
       return;
     }
     FocusScope.of(context).unfocus();
     setState(() { _loading = true; _formError = null; });
     try {
-      final session = await _api.tuneChannel(_channel, displayName);
+      final session = _creating
+          ? await _api.createChannel(channel, displayName)
+          : await _api.joinChannel(code, displayName);
       await _radio.open(session);
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('relay_display_name', displayName);
-      await prefs.setInt('relay_channel', _channel);
     } catch (e) {
       if (mounted) setState(() => _formError = e.toString());
     } finally {
@@ -181,33 +192,27 @@ class _RelayHomeState extends State<RelayHome> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Row(children: [
+                    Expanded(child: _ModeButton(
+                      label: 'Create channel', selected: _creating,
+                      onTap: () => setState(() { _creating = true; _formError = null; }),
+                    )),
+                    const SizedBox(width: 8),
+                    Expanded(child: _ModeButton(
+                      label: 'Join with code', selected: !_creating,
+                      onTap: () => setState(() { _creating = false; _formError = null; }),
+                    )),
+                  ]),
+                  const SizedBox(height: 26),
                   const _FieldLabel('YOUR NAME'),
                   const SizedBox(height: 8),
                   _TextField(controller: _name, hint: 'What should others call you?', icon: Icons.person_outline_rounded, maxLength: 24),
                   const SizedBox(height: 18),
-                  const _FieldLabel('RADIO CHANNEL'),
+                  _FieldLabel(_creating ? 'CHANNEL NAME' : 'INVITE CODE'),
                   const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: ink.withValues(alpha: .55),
-                      borderRadius: BorderRadius.circular(13),
-                      border: Border.all(color: Colors.white.withValues(alpha: .09)),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<int>(
-                        value: _channel,
-                        isExpanded: true,
-                        dropdownColor: panel,
-                        style: const TextStyle(color: cream, fontSize: 14),
-                        items: [
-                          for (var n = 1; n <= _channelCount; n++)
-                            DropdownMenuItem(value: n, child: Text('Channel $n')),
-                        ],
-                        onChanged: _loading ? null : (n) => setState(() => _channel = n ?? _channel),
-                      ),
-                    ),
-                  ),
+                  _creating
+                      ? _TextField(controller: _channelName, hint: 'e.g. Family radio', icon: Icons.graphic_eq_rounded, maxLength: 40)
+                      : _TextField(controller: _inviteCode, hint: 'XXXX-XXXX-XXXX-XXXX', icon: Icons.key_rounded, maxLength: 30, caps: true),
                   if (_formError != null) ...[
                     const SizedBox(height: 16),
                     Text(_formError!, style: const TextStyle(color: danger, fontSize: 13)),
@@ -217,8 +222,8 @@ class _RelayHomeState extends State<RelayHome> {
                     onPressed: _loading ? null : _enter,
                     icon: _loading
                         ? const SizedBox(width: 17, height: 17, child: CircularProgressIndicator(strokeWidth: 2, color: ink))
-                        : const Icon(Icons.arrow_forward_rounded),
-                    label: Text(_loading ? 'Tuning in…' : 'Tune in'),
+                        : Icon(_creating ? Icons.arrow_forward_rounded : Icons.login_rounded),
+                    label: Text(_loading ? 'Connecting…' : (_creating ? 'Create & connect' : 'Join channel')),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(55),
                       backgroundColor: green, foregroundColor: ink,
@@ -231,9 +236,9 @@ class _RelayHomeState extends State<RelayHome> {
             ),
             const SizedBox(height: 22),
             const Row(children: [
-              Icon(Icons.radio_rounded, size: 16, color: mint),
+              Icon(Icons.lock_outline_rounded, size: 16, color: mint),
               SizedBox(width: 9),
-              Expanded(child: Text('Shared channels. Anyone with this app can tune in to the same number.', style: TextStyle(color: secondary, fontSize: 12))),
+              Expanded(child: Text('Only people with your invite code can join.', style: TextStyle(color: secondary, fontSize: 12))),
             ]),
           ],
         ),
@@ -435,6 +440,31 @@ class _Eyebrow extends StatelessWidget {
     style: const TextStyle(color: mint, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2.1));
 }
 
+class _ModeButton extends StatelessWidget {
+  const _ModeButton({required this.label, required this.selected, required this.onTap});
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Material(
+    color: selected ? panelHighlight : Colors.transparent,
+    borderRadius: BorderRadius.circular(12),
+    child: InkWell(
+      onTap: onTap, borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 5),
+        decoration: BoxDecoration(
+          border: Border.all(color: selected ? mint.withValues(alpha: .35) : Colors.white.withValues(alpha: .07)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(label, textAlign: TextAlign.center, style: TextStyle(
+          color: selected ? cream : secondary, fontWeight: FontWeight.w700, fontSize: 12,
+        )),
+      ),
+    ),
+  );
+}
+
 class _FieldLabel extends StatelessWidget {
   const _FieldLabel(this.label);
   final String label;
@@ -444,16 +474,17 @@ class _FieldLabel extends StatelessWidget {
 }
 
 class _TextField extends StatelessWidget {
-  const _TextField({required this.controller, required this.hint, required this.icon, required this.maxLength});
+  const _TextField({required this.controller, required this.hint, required this.icon, required this.maxLength, this.caps = false});
   final TextEditingController controller;
   final String hint;
   final IconData icon;
   final int maxLength;
+  final bool caps;
   @override
   Widget build(BuildContext context) => TextField(
     controller: controller,
     maxLength: maxLength,
-    textCapitalization: TextCapitalization.sentences,
+    textCapitalization: caps ? TextCapitalization.characters : TextCapitalization.sentences,
     style: const TextStyle(color: cream, fontSize: 14),
     decoration: InputDecoration(
       filled: true,

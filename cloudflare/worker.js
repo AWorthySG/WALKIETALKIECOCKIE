@@ -157,7 +157,7 @@ export default {
           'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.livekit.cloud wss://*.livekit.cloud; media-src 'self' blob:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
         } });
       }
-      if (u.pathname === '/health' && req.method === 'GET') return out({ ok: true, service: 'relay-walkie', platform: 'cloudflare', version: '2.5.2' });
+      if (u.pathname === '/health' && req.method === 'GET') return out({ ok: true, service: 'relay-walkie', platform: 'cloudflare', version: '2.6.0' });
       if (!u.pathname.startsWith('/v1/')) return out({ error: 'Not found' }, 404);
       if (req.method !== 'POST') return out({ error: 'Method not allowed' }, 405);
       if (req.headers.get('origin') && req.headers.get('origin') !== u.origin) return out({ error: 'Origin not allowed' }, 403);

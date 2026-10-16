@@ -6,7 +6,7 @@ async function post(path,body={},token) {
  const r=await fetch(base+path,{method:'POST',headers:{'content-type':'application/json',...(token?{authorization:`Bearer ${token}`}:{})},body:JSON.stringify(body),signal:AbortSignal.timeout(15000)});
  return {status:r.status,data:await r.json()};
 }
-const health=await fetch(base+'/health'); assert.equal(health.status,200);assert.equal((await health.json()).version,'2.5.2');
+const health=await fetch(base+'/health'); assert.equal(health.status,200);assert.equal((await health.json()).version,'2.6.0');
 for(const path of ['/','/app.js','/app.css','/icon-192.png','/manifest.webmanifest','/sw.js']) {
  const r=await fetch(base+path);assert.equal(r.status,200,path);assert.ok((await r.arrayBuffer()).byteLength>50);
 }

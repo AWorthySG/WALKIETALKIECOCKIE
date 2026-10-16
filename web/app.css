@@ -16,3 +16,26 @@
 .brand-sticker{border-radius:12px}.cover-sticker{border-radius:24px;background:#000}
 
 select{font:inherit;width:100%;background:#081923;color:#fff;border:1px solid #ffffff20;padding:16px 14px;border-radius:11px;font-size:16px}select:focus{outline:2px solid var(--mint);outline-offset:1px}.tune-title{font-size:22px;margin:0 0 22px}#invite-code{font-family:'Nunito',sans-serif;letter-spacing:0}
+
+.enter-icon{display:inline-flex;align-items:center;justify-content:center}
+.channel-heading h1{margin:0}
+.radio-panel{padding-top:22px}.status-line{font-size:14px;letter-spacing:1.5px;color:var(--mint);font-weight:800;margin:0 0 8px}
+.radio-panel h2{font-size:26px}#talk strong{font-size:19px;letter-spacing:1px}#talk span{font-size:13px;letter-spacing:1px}
+.hint{font-size:15px}.tag{font-size:14px}.fine{font-size:14px}.small-label{font-size:12px}
+.primary.big{justify-content:center;font-size:18px;min-height:64px;margin:6px 0 0}
+.quick{padding:20px;margin-top:18px}.quick h2{font-size:19px}.quick .fine{margin-top:6px}
+.quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.quick-message{min-height:84px;border:1px solid #ffffff1c;border-radius:16px;background:#183645;color:#f1f4e9;font-size:16px;font-weight:700;line-height:1.3;padding:12px;text-align:left}
+.quick-message:active{background:#21485a}.quick-message:disabled{opacity:.45;cursor:default}
+#voice-status{margin-top:14px}
+.more{margin-top:18px;padding:0}.more>summary{cursor:pointer;padding:20px;font-size:17px;font-weight:700;list-style-position:inside}
+.option{padding:16px 20px;border-top:1px solid #ffffff12}.option label{margin:0;font-size:16px;color:#f1f4e9;cursor:pointer}
+.option input[type=checkbox]{width:24px;height:24px;padding:0;accent-color:var(--lime);flex:none}
+.option h3{font-size:16px;margin:0}.option .subtle{font-size:15px}.option textarea{font:inherit;width:100%;min-height:70px;margin-top:8px;background:#08192399;color:#fff;border:1px solid #ffffff20;border-radius:11px;padding:12px;font-size:16px}
+.option .primary{width:auto;margin:10px 0 0;min-height:48px;padding:12px 16px}
+#invite-code{font-size:20px;font-weight:800;letter-spacing:1.5px;margin:8px 0 4px}
+.danger{color:#ffc0b1}.night-toggle{font-size:14px}
+input,select,textarea{font-size:16px}
+/* Night mode: dim red on black keeps night vision and does not light up a dark room. */
+html.night,html.night body{background:#000}
+html.night main{filter:grayscale(1) brightness(.55) sepia(1) saturate(30) hue-rotate(-32deg) brightness(.6)}

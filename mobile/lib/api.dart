@@ -140,6 +140,25 @@ class RelayApi {
     return ChannelSession.fromJson(response);
   }
 
+  /// Starts a private family channel; the response carries its invite code.
+  Future<ChannelSession> createChannel(String name, String displayName) async {
+    final response = await _request(
+      'POST',
+      '/v1/channels',
+      body: {'name': name, 'displayName': displayName},
+    );
+    return ChannelSession.fromJson(response);
+  }
+
+  Future<ChannelSession> joinChannel(String code, String displayName) async {
+    final response = await _request(
+      'POST',
+      '/v1/channels/join',
+      body: {'code': code, 'displayName': displayName},
+    );
+    return ChannelSession.fromJson(response);
+  }
+
   Future<FloorLease> claimFloor(String token) async {
     final response = await _request(
       'POST',

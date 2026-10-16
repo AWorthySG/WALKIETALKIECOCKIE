@@ -92,3 +92,15 @@ After deployment:
 Not checked: physical phones and audible playback.
 
 Deploy with `npm run deploy`, then run `node scripts/verify_live.mjs`.
+
+## v2.6.0 ease-of-use update (not yet in production)
+
+Private family channels, opening straight into the saved channel, tap to talk with a one-minute limit, quick messages, a simpler main screen, night mode and larger text. The Flutter app uses private channels again.
+
+Checked in this environment:
+
+- 46 API, controller, configuration and bundle tests passed, including new tests for invite codes, saved channels, tap and hold modes, and the quick-message cache.
+- Two headless Chromium phones (390 × 844), rebuilt client with the live API: Mum started a channel; Dad joined from the invite link. One tap transmitted and Dad received the audio; a second tap stopped it. A quick message was generated and sent, then sent again from the cache. A reload reopened the channel. Night mode, hold mode and leave (which made the next reload show the start screen) all worked. No page errors.
+- The browser test found that the tap timer threw "Illegal invocation" in browsers only; fixed, with a regression test.
+
+Not checked: physical phones, audible playback, and the Flutter builds (CI compiles them).
